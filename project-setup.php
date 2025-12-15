@@ -95,30 +95,8 @@ CREATE TABLE `post` (
     INDEX `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL;
-file_put_contents('migrations/schema.sql', $schemaSQL);
+file_put_contents('dummy-data.txt', $schemaSQL);
 echo "✓ Schema SQL created!\n\n";
-
-// Dummy data SQL yaratish
-echo "[6/15] Creating dummy data SQL...\n";
-$dummyDataSQL = <<<'SQL'
--- Dummy data for testing
--- Password for all users: password
-INSERT INTO `user` (`username`, `password_hash`, `auth_key`, `created_at`) VALUES
-('naruto', '$2y$10$2Xagz5d9GmySTMSUMrZoW.TI/EL5S7w8Ilrg68meOiWjnNBI23TMG', 'naruto_auth_key', NOW()),
-('sasuke', '$2y$10$2Xagz5d9GmySTMSUMrZoW.TI/EL5S7w8Ilrg68meOiWjnNBI23TMG', 'sasuke_auth_key', NOW()),
-('sakura', '$2y$10$2Xagz5d9GmySTMSUMrZoW.TI/EL5S7w8Ilrg68meOiWjnNBI23TMG', 'sakura_auth_key', NOW()),
-('kakashi', '$2y$10$2Xagz5d9GmySTMSUMrZoW.TI/EL5S7w8Ilrg68meOiWjnNBI23TMG', 'kakashi_auth_key', NOW());
-
-INSERT INTO `post` (`user_id`, `title`, `content`, `image`, `views`, `created_at`) VALUES
-(1, 'Uzumaki Naruto - Konohaning Yettiinchi Hokage', 'Uzumaki Naruto - Konoha qishlog\'ining eng kuchli shinobisi va Yettiinchi Hokage. U Nine-Tails jinchuriki bo\'lib, kuchli rasengan va shadow clone jutsularini ishlatadi. Naruto o\'zining qat\'iyati va do\'stlari uchun kurashish qobiliyati bilan mashhur. U doimo "Believe it!" degan so\'z bilan motivatsiya beradi va hech qachon taslim bo\'lmaydi.', 'https://i.pinimg.com/736x/f0/46/f1/f046f16506c98144475c3708ea99ba72.jpg', 0, NOW() - INTERVAL 5 DAY),
-(1, 'Rasengan - Naruto\'ning Asosiy Jutsusi', 'Rasengan - Naruto\'ning eng kuchli jutsularidan biri. Bu jutsu to\'rtinchi Hokage Minato Namikaze tomonidan yaratilgan va Naruto tomonidan mukammallashtirilgan. Rasengan chakra spiral shaklida aylanadi va dushmanga kuchli zarba beradi. Naruto bu jutsuni o\'q otish yoki qo\'l bilan boshqarish orqali turli xil variantlarda ishlatadi.', 'default.jpg', 0, NOW() - INTERVAL 3 DAY),
-(1, 'Nine-Tails (Kurama) - Kuchli Biju', 'Kurama yoki Nine-Tails - eng kuchli Tailed Beast. Naruto tug\'ilganidan keyin Kurama uning ichiga muhrlangan edi. Dastlab, Naruto va Kurama o\'rtasida munosabatlar yomon edi, lekin vaqt o\'tishi bilan ular do\'st bo\'lishdi. Kurama Naruto\'ga katta kuch beradi va ular birgalikda kuchliroq bo\'lishadi.', 'https://i.namu.wiki/i/4DPCwHiDu1KN0-LVq0jz870qdvOaEUeQI_mhlNCldBbnzXuSkn7Cfp2cR_lcSGejtzGjhdkq1p36coV9DMygVQ.webp', 0, NOW() - INTERVAL 1 DAY),
-(2, 'Uchiha Sasuke - Sharingan\'ning Egasi', 'Uchiha Sasuke - Konoha\'ning eng kuchli uchiha qabilasining oxirgi a\'zosi. U Sharingan va keyinchalik Mangekyo Sharingan ko\'zlariga ega. Sasuke o\'zining akasi Itachi\'dan qasos olish uchun yo\'lga chiqdi va Orochimaru bilan shartnoma tuzdi. Keyinchalik u Naruto bilan do\'st bo\'ldi va Konohaga qaytdi.', 'https://i.pinimg.com/736x/35/df/1c/35df1cef6b596381b6bdcdd79b45bb0c.jpg', 0, NOW() - INTERVAL 4 DAY),
-(2, 'Chidori - Sasuke\'ning Signature Jutsusi', 'Chidori - Sasuke\'ning eng mashhur jutsusi. Bu jutsu Kakashi Hatake tomonidan yaratilgan va Sasuke tomonidan o\'rgatilgan. Chidori elektr chakradan foydalanadi va dushmanga kuchli zarba beradi. Sasuke bu jutsuni turli xil variantlarda ishlatadi, jumladan Chidori Stream va Chidori Sharp Spear.', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTLzzcCYWiVyazuTQXvFy_rFW7e5dt6VMrKg&s', 0, NOW() - INTERVAL 2 DAY),
-(2, 'Mangekyo Sharingan - Kuchli Ko\'z Teknikasi', 'Mangekyo Sharingan - Uchiha qabilasining eng kuchli ko\'z teknikasi. Bu ko\'zlar faqat qandaydir kuchli hissiyotlar natijasida ochiladi. Sasuke o\'zining akasi Itachi\'dan ko\'z olgach, Mangekyo Sharingan\'ga ega bo\'ldi. Bu ko\'zlar Amaterasu, Susano\'o va boshqa kuchli jutsularni ishlatishga imkon beradi.', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSiG-ufqbeWJS5GNk_aqthGbj2H7KC8NsYgIA&s', 0, NOW() - INTERVAL 1 DAY);
-SQL;
-file_put_contents('migrations/dummy-data.sql', $dummyDataSQL);
-echo "✓ Dummy data SQL created!\n\n";
 
 // Models yaratish
 echo "[7/15] Creating models...\n";
@@ -1595,4 +1573,3 @@ function deleteDirectory($dir) {
     }
     return rmdir($dir);
 }
-
