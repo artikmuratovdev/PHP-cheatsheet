@@ -26,7 +26,7 @@ $projectName = $options['project-name'] ?? 'savitar-blog';
 $projectPath = $options['project-path'] ?? '.';
 $dbName = $options['db-name'] ?? 'savitar_blog';
 $dbUser = $options['db-user'] ?? 'root';
-$dbPassword = $options['db-password'] ?? '';
+$dbPassword = $options['db-passaword'] ?? '';
 
 echo "========================================\n";
 echo "Savitar Blog - Complete Yii2 Setup\n";
@@ -303,6 +303,7 @@ namespace app\models;
 use Yii;
 use yii\behaviors\TimestampBehavior;
 use yii\db\Expression;
+use yii\web\UploadedFile;
 
 /**
  * This is the model class for table "post".
@@ -318,6 +319,15 @@ use yii\db\Expression;
  */
 class Post extends \yii\db\ActiveRecord
 {
+    /**
+     * @var UploadedFile
+     */
+    public $imageFile;
+    
+    /**
+     * @var string Image URL (alternative to file upload)
+     */
+    public $imageUrl;
     /**
      * {@inheritdoc}
      */
@@ -355,6 +365,8 @@ class Post extends \yii\db\ActiveRecord
             [['created_at', 'updated_at'], 'safe'],
             [['title', 'image'], 'string', 'max' => 255],
             [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::class, 'targetAttribute' => ['user_id' => 'id']],
+            [['imageFile'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, gif', 'maxSize' => 5 * 1024 * 1024], // 5MB max
+            [['imageUrl'], 'url', 'skipOnEmpty' => true, 'defaultScheme' => 'http'],
         ];
     }
 
@@ -369,6 +381,8 @@ class Post extends \yii\db\ActiveRecord
             'title' => 'Title',
             'content' => 'Content',
             'image' => 'Image',
+            'imageFile' => 'Image File',
+            'imageUrl' => 'Image URL',
             'views' => 'Views',
             'created_at' => 'Created At',
             'updated_at' => 'Updated At',
@@ -384,15 +398,65 @@ class Post extends \yii\db\ActiveRecord
     }
 
     /**
+     * Upload image file
+     * @return bool
+     */
+    public function upload()
+    {
+        if ($this->imageFile) {
+            $uploadPath = Yii::getAlias('@webroot/uploads');
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            
+            $fileName = uniqid() . '_' . time() . '.' . $this->imageFile->extension;
+            $filePath = $uploadPath . DIRECTORY_SEPARATOR . $fileName;
+            
+            if ($this->imageFile->saveAs($filePath)) {
+                // Delete old image if exists and not default
+                if (!empty($this->image) && $this->image !== 'default.jpg' && strpos($this->image, 'http') !== 0) {
+                    $oldFilePath = $uploadPath . DIRECTORY_SEPARATOR . $this->image;
+                    if (file_exists($oldFilePath)) {
+                        @unlink($oldFilePath);
+                    }
+                }
+                $this->image = $fileName;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Process image input (file or URL)
+     * @return bool
+     */
+    public function processImage()
+    {
+        // Priority: File upload > URL > default
+        if ($this->imageFile) {
+            // File upload has priority
+            return $this->upload();
+        } elseif (!empty($this->imageUrl)) {
+            // Use URL if provided
+            $this->image = $this->imageUrl;
+            return true;
+        } elseif (empty($this->image)) {
+            // Set default if nothing provided
+            $this->image = 'default.jpg';
+            return true;
+        }
+        return true; // Keep existing image
+    }
+
+    /**
      * Before save event
      */
     public function beforeSave($insert)
     {
         if (parent::beforeSave($insert)) {
-            // Set default image only on insert if image is empty
-            if ($insert && empty($this->image)) {
-                $this->image = 'default.jpg';
-            }
+            // Process image (file or URL)
+            $this->processImage();
             return true;
         }
         return false;
@@ -725,6 +789,7 @@ use app\models\Post;
 use app\models\PostSearch;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
+use yii\web\UploadedFile;
 use yii\filters\VerbFilter;
 use yii\filters\AccessControl;
 
@@ -819,13 +884,16 @@ class PostController extends Controller
             // Automatically assign user_id to current authenticated user
             $model->user_id = Yii::$app->user->id;
             
-            // Set default image if none provided
-            if (empty($model->image)) {
-                $model->image = 'default.jpg';
-            }
+            // Handle file upload
+            $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
             
-            if ($model->save()) {
-                return $this->redirect(['view', 'id' => $model->id]);
+            if ($model->validate()) {
+                // Process image (file upload has priority over URL)
+                $model->processImage();
+                
+                if ($model->save()) {
+                    return $this->redirect(['view', 'id' => $model->id]);
+                }
             }
         }
         
@@ -848,9 +916,19 @@ class PostController extends Controller
             throw new \yii\web\ForbiddenHttpException('You can only update your own posts.');
         }
         
-        if ($model->load(Yii::$app->request->post()) && $model->save()) {
-            Yii::$app->session->setFlash('success', 'Post has been updated successfully.');
-            return $this->redirect(['view', 'id' => $model->id]);
+        if ($model->load(Yii::$app->request->post())) {
+            // Handle file upload
+            $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
+            
+            if ($model->validate()) {
+                // Process image (file upload has priority over URL)
+                $model->processImage();
+                
+                if ($model->save()) {
+                    Yii::$app->session->setFlash('success', 'Post has been updated successfully.');
+                    return $this->redirect(['view', 'id' => $model->id]);
+                }
+            }
         }
         
         return $this->render('update', ['model' => $model]);
@@ -1068,7 +1146,7 @@ use yii\helpers\Url;
 /** @var app\models\Post $model */
 
 $this->title = $model->title;
-$this->params['breadcrumbs'][] = ['label' => 'Home', 'url' => ['site/index']];
+$this->params['breadcrumbs'][] = ['label' => 'Posts', 'url' => ['site/index']];
 $this->params['breadcrumbs'][] = $this->title;
 ?>
 <div class="post-view">
@@ -1137,7 +1215,7 @@ use yii\helpers\Html;
 /** @var app\models\Post $model */
 
 $this->title = 'Create Post';
-$this->params['breadcrumbs'][] = ['label' => 'Home', 'url' => ['site/index']];
+$this->params['breadcrumbs'][] = ['label' => 'Posts', 'url' => ['site/index']];
 $this->params['breadcrumbs'][] = $this->title;
 ?>
 <div class="post-create">
@@ -1161,8 +1239,8 @@ use yii\helpers\Html;
 /** @var yii\web\View $this */
 /** @var app\models\Post $model */
 
-$this->title = 'Update Post: ' . $model->title;
-$this->params['breadcrumbs'][] = ['label' => 'Home', 'url' => ['site/index']];
+$this->title = 'Update Post';
+$this->params['breadcrumbs'][] = ['label' => 'Posts', 'url' => ['site/index']];
 $this->params['breadcrumbs'][] = ['label' => $model->title, 'url' => ['view', 'id' => $model->id]];
 $this->params['breadcrumbs'][] = 'Update';
 ?>
@@ -1192,13 +1270,86 @@ use yii\widgets\ActiveForm;
 
 <div class="post-form">
 
-    <?php $form = ActiveForm::begin(); ?>
+    <?php $form = ActiveForm::begin(['options' => ['enctype' => 'multipart/form-data']]); ?>
 
     <?= $form->field($model, 'title')->textInput(['maxlength' => true]) ?>
 
     <?= $form->field($model, 'content')->textarea(['rows' => 10]) ?>
 
-    <?= $form->field($model, 'image')->textInput(['maxlength' => true])->hint('Leave empty to use default image (default.jpg)') ?>
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Image</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label fw-bold mb-3">Image (Upload File or Enter URL)</label>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">Upload Image File</label>
+                        <div class="input-group">
+                            <?= $form->field($model, 'imageFile', [
+                                'options' => ['class' => 'form-control-wrapper flex-grow-1'], 
+                                'template' => '{input}{error}'
+                            ])->fileInput([
+                                'class' => 'form-control', 
+                                'accept' => 'image/*', 
+                                'id' => 'imageFileInput'
+                            ])->label(false) ?>
+                            <label class="input-group-text bg-primary text-white" for="imageFileInput">
+                                Upload
+                            </label>
+                        </div>
+                        <small class="form-text text-muted d-block mt-1">
+                            JPG, PNG, GIF (max 5MB)
+                        </small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">Or Enter Image URL</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-secondary text-white">
+                                URL
+                            </span>
+                            <?= $form->field($model, 'imageUrl', [
+                                'options' => ['class' => 'form-control-wrapper flex-grow-1'], 
+                                'template' => '{input}{error}'
+                            ])->textInput([
+                                'class' => 'form-control text-dark', 
+                                'placeholder' => 'https://example.com/image.jpg',
+                                'type' => 'url'
+                            ])->label(false) ?>
+                        </div>
+                        <small class="form-text text-muted d-block mt-1">
+                            Enter full image URL
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info mb-0 mt-3">
+                <strong>Note:</strong> File upload has priority. If both are provided, the uploaded file will be used. Leave both empty to use default image or keep current image.
+            </div>
+        </div>
+    </div>
+    
+    <?php if (!$model->isNewRecord && !empty($model->image) && $model->image !== 'default.jpg'): ?>
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">Current Image</h6>
+            </div>
+            <div class="card-body text-center">
+                <?php
+                if (strpos($model->image, 'http') === 0) {
+                    $imageUrl = $model->image;
+                } else {
+                    $imageUrl = Yii::getAlias('@web/uploads/' . $model->image);
+                }
+                ?>
+                <img src="<?= $imageUrl ?>" alt="Current image" class="img-thumbnail" style="max-width: 300px; max-height: 300px; object-fit: contain;">
+            </div>
+        </div>
+    <?php endif; ?>
+    
+    <?= $form->field($model, 'image')->hiddenInput()->label(false) ?>
 
     <div class="form-group">
         <?= Html::submitButton($model->isNewRecord ? 'Create' : 'Update', ['class' => 'btn btn-success']) ?>
@@ -1322,7 +1473,13 @@ $this->registerLinkTag(['rel' => 'icon', 'type' => 'image/x-icon', 'href' => Yii
 <main id="main" class="flex-shrink-0" role="main">
     <div class="container">
         <?php if (!empty($this->params['breadcrumbs'])): ?>
-            <?= Breadcrumbs::widget(['links' => $this->params['breadcrumbs']]) ?>
+            <?= Breadcrumbs::widget([
+                'links' => $this->params['breadcrumbs'],
+                'homeLink' => ['label' => 'Home', 'url' => Yii::$app->homeUrl],
+                'options' => ['class' => 'breadcrumb'],
+                'itemTemplate' => "<li class=\"breadcrumb-item\">{link}</li>\n",
+                'activeItemTemplate' => "<li class=\"breadcrumb-item active\" aria-current=\"page\">{link}</li>\n",
+            ]) ?>
         <?php endif ?>
         <?= Alert::widget() ?>
         <?= $content ?>
